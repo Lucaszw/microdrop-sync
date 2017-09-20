@@ -1,5 +1,6 @@
 import paho_mqtt_helpers as pmh
 
+from .electrodes import Electrodes
 from .plugin_manager import PluginManager
 
 
@@ -10,18 +11,19 @@ class MicrodropSync(pmh.BaseMqttReactor):
         pmh.BaseMqttReactor.__init__(self)
         self.start()
         self.plugin_manager = PluginManager(self)
+        self.electrodes = Electrodes(self)
 
-    def getStateSync(self, sender, val):
+    def get_state_sync(self, sender, val):
         """ Blocking method to directly get state variable"""
         variables = {}
         variables['notSet'] = True
         variables['output'] = None
 
-        def onVariableSet(x, a):
+        def on_variable_set(x, a):
             variables['notSet'] = False
             variables['output'] = x
 
-        sub = self.onStateMsg(sender, val, onVariableSet)
+        sub = self.onStateMsg(sender, val, on_variable_set)
 
         self.mqtt_client.subscribe(sub)
 
@@ -30,20 +32,29 @@ class MicrodropSync(pmh.BaseMqttReactor):
 
         return variables['output']
 
-    def triggerSync(self, receiver, action, val, successTopic=None):
+    def put_sync(self, receiver, prop, val, success_topic=None):
+        callback = self.bindPutMsg(receiver, prop, "trigger-event")
+        return self.broadcast_sync(callback, "trigger-event", val,
+                                   success_topic)
+
+    def trigger_sync(self, receiver, action, val, success_topic=None):
+        callback = self.bindTriggerMsg(receiver, action, "trigger-event")
+        return self.broadcast_sync(callback, "trigger-event", val,
+                                   success_topic)
+
+    def broadcast_sync(self, callback, event, val, success_topic=None):
         var = {}
         var['messageNotDelivered'] = True
-        var['output'] = True
-        callback = self.bindTriggerMsg(receiver, action, "trigger-event")
+        var['output'] = None
 
-        def onSuccess(payload, args):
+        def on_success(payload, args):
             var['messageNotDelivered'] = False
             var['output'] = payload
 
         self.trigger("trigger-event", val)
 
-        if successTopic:
-            sub = self.addSubscription(successTopic, onSuccess)
+        if success_topic:
+            sub = self.addSubscription(success_topic, on_success)
             self.mqtt_client.subscribe(sub)
             while var['messageNotDelivered']:
                 pass
