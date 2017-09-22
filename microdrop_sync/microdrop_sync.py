@@ -13,6 +13,14 @@ class MicrodropSync(pmh.BaseMqttReactor):
         self.plugin_manager = PluginManager(self)
         self.electrodes = Electrodes(self)
 
+    def start(self):
+        # Connect to MQTT broker.
+        self._connect()
+        self.mqtt_client.loop_start()
+
+    def on_connect(self, client, userdata, flags, rc):
+        pass
+
     def get_state_sync(self, sender, val):
         """ Blocking method to directly get state variable"""
         variables = {}
