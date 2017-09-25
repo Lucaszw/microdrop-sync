@@ -14,19 +14,16 @@ class PluginManager(object):
         return self.ms.trigger_sync("web-server", "add-plugin-path",
                                     var, success_topic)
 
-    def remove_plugin_path(self, path):
-        successTopic = MicrodropUtils.get_state_topic("web-server",
-                                                      "process-plugins")
-        var = {}
-        var['path'] = path
-        return self.ms.trigger_sync("web-server", "remove-plugin-path",
-                                    var, successTopic)
+    def disable_web_plugin(self, path):
+        plugin = self.get_web_plugins()[path]
+        success_topic = MicrodropUtils.get_state_topic('web-server',
+                                                       'web-plugins')
+        if (plugin['state'] == 'disabled'):
+            return False
 
-    def get_process_plugins(self):
-        return self.ms.get_state_sync("web-server", "process-plugins")
-
-    def get_web_plugins(self):
-        return self.ms.get_state_sync("web-server", "web-plugins")
+        plugin['state'] = 'disabled'
+        return self.ms.trigger_sync("web-server", "update-ui-plugin-state",
+                                    plugin, success_topic)[path]
 
     def enable_web_plugin(self, path):
         plugin = self.get_web_plugins()[path]
@@ -39,23 +36,34 @@ class PluginManager(object):
         return self.ms.trigger_sync("web-server", "update-ui-plugin-state",
                                     plugin, success_topic)[path]
 
-    def disable_web_plugin(self, path):
-        plugin = self.get_web_plugins()[path]
-        success_topic = MicrodropUtils.get_state_topic('web-server',
-                                                       'web-plugins')
-        if (plugin['state'] == 'disabled'):
-            return False
+    def get_process_plugins(self):
+        return self.ms.get_state_sync("web-server", "process-plugins")
 
-        plugin['state'] = 'disabled'
-        return self.ms.trigger_sync("web-server", "update-ui-plugin-state",
-                                    plugin, success_topic)[path]
+    def get_running_process_plugins(self):
+        plugins = self.get_process_plugins()
+        running_plugins = []
+        for id, plugin in plugins.iteritems():
+            if (plugin['state'] == 'running'):
+                running_plugins.append(plugin)
+        return running_plugins
+
+    def get_web_plugins(self):
+        return self.ms.get_state_sync("web-server", "web-plugins")
+
+    def remove_plugin_path(self, path):
+        successTopic = MicrodropUtils.get_state_topic("web-server",
+                                                      "process-plugins")
+        var = {}
+        var['path'] = path
+        return self.ms.trigger_sync("web-server", "remove-plugin-path",
+                                    var, successTopic)
 
     def start_process_plugin(self, id):
         # Get Process Plugins:
         plugin = self.get_process_plugins()[id]
 
         success_topic = MicrodropUtils.get_signal_topic(plugin['name'],
-                                                        'plugin-started')
+                                                        'running')
         if (plugin['state'] == 'running'):
             return False
         self.ms.trigger_sync("web-server", "launch-plugin",
@@ -67,8 +75,10 @@ class PluginManager(object):
         plugin = process_plugins[id]
         if (plugin['state'] == 'stopped'):
             return False
-        success_topic = MicrodropUtils.get_signal_topic(plugin['name'],
-                                                        'plugin-exited')
+
+        success_topic = MicrodropUtils.get_signal_topic("broker",
+                                                        'client-disconnected')
         self.ms.trigger_sync("web-server", "close-plugin",
                              plugin['name'], success_topic)
+        # TODO: Validate the client name matches the plugin that was closed
         return self.get_process_plugins()[id]
