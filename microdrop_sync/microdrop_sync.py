@@ -1,10 +1,14 @@
 import threading
+import time
 
 import paho_mqtt_helpers as pmh
 
 from .device import Device
 from .electrodes import Electrodes
 from .plugin_manager import PluginManager
+from .protocols import Protocols
+from .routes import Routes
+from .steps import Steps
 
 
 class MicrodropSync(pmh.BaseMqttReactor):
@@ -13,9 +17,12 @@ class MicrodropSync(pmh.BaseMqttReactor):
         self.name = self.plugin_name
         pmh.BaseMqttReactor.__init__(self)
         self.start()
-        self.plugin_manager = PluginManager(self)
         self.device = Device(self)
         self.electrodes = Electrodes(self)
+        self.plugin_manager = PluginManager(self)
+        self.protocols = Protocols(self)
+        self.routes = Routes(self)
+        self.steps = Steps(self)
         self.default_timeout = 5.0
 
     def start(self):
@@ -32,8 +39,9 @@ class MicrodropSync(pmh.BaseMqttReactor):
                                    success_topic)
 
     def trigger_sync(self, receiver, action, val, success_topic=None):
-        callback = self.bindTriggerMsg(receiver, action, "trigger-event")
-        return self.broadcast_sync(callback, "trigger-event", val,
+        eventname = "trigger-event:" + str(time.time())
+        callback = self.bindTriggerMsg(receiver, action, eventname)
+        return self.broadcast_sync(callback, eventname, val,
                                    success_topic)
 
     def get_state_sync(self, sender, val):
@@ -67,7 +75,7 @@ class MicrodropSync(pmh.BaseMqttReactor):
             raise RuntimeError(var['status'] + "\n" +
                                sender)
 
-    def broadcast_sync(self, callback, event, val, success_topic=None):
+    def broadcast_sync(self, callback, eventname, val, success_topic=None):
         var = {}
         var['messageNotDelivered'] = True
         var['output'] = None
@@ -84,7 +92,7 @@ class MicrodropSync(pmh.BaseMqttReactor):
                 var['messageNotDelivered'] = False
                 var['status'] = "MAX TIMEOUT ERROR"
 
-        self.trigger("trigger-event", val)
+        self.trigger(eventname, val)
 
         if success_topic:
             var['sub'] = self.addSubscription(success_topic, on_success)
@@ -97,7 +105,7 @@ class MicrodropSync(pmh.BaseMqttReactor):
             var['status'] = "SUCCESS"
 
         if var['status'] == "SUCCESS":
-            self.off("trigger-event", callback)
+            self.off(eventname, callback)
             return var['output']
         else:
             raise RuntimeError(var['status'] + "\n" +
