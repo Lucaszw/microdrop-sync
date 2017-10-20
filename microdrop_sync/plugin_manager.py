@@ -57,7 +57,11 @@ class PluginManager(object):
                                     var, successTopic)
 
     def start_process_plugin(self, id):
-        # Get Process Plugins:
+        print ("start_process_plugin depricated.")
+        print ("use start_process_plugin_by_id instead")
+        return self.start_process_plugin_by_id(id)
+
+    def start_process_plugin_by_id(self, id):
         plugin = self.get_process_plugins()[id]
         success_topic = MicrodropUtils\
             .get_signal_topic(plugin['name'], 'running')
